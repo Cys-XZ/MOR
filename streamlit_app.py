@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import os
+import sys
 import tempfile
 from pathlib import Path
 import pyvista as pv
@@ -9,6 +10,71 @@ import warnings
 import pandas as pd
 from extract_displacement_components import list_available_deltats, extract_displacement_components, visualize_displacement
 import torch.nn as nn
+
+# 检测是否在云环境中运行
+def is_cloud_environment():
+    """检测是否在云环境中运行（没有图形界面）"""
+    try:
+        # 检查是否在常见的云平台上
+        cloud_indicators = ['STREAMLIT_SHARING', 'HEROKU', 'RAILWAY', 'RENDER', 'VERCEL', 'STREAMLIT_CLOUD']
+        if any(indicator in os.environ for indicator in cloud_indicators):
+            return True
+        
+        # 只在Linux系统上检查DISPLAY环境变量
+        if os.name == 'posix' and 'DISPLAY' not in os.environ:
+            # 进一步检查是否真的在无头环境中
+            try:
+                import subprocess
+                # 检查是否可以运行图形相关命令
+                result = subprocess.run(['which', 'Xvfb'], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return False  # 有Xvfb，可能是开发环境
+                
+                # 检查是否在SSH会话中
+                if 'SSH_CLIENT' in os.environ or 'SSH_TTY' in os.environ:
+                    return True
+                    
+                return True  # Linux系统没有DISPLAY且不在SSH中，可能是云环境
+            except:
+                return True
+        
+        # Windows和macOS通常不需要DISPLAY环境变量
+        if os.name in ['nt', 'posix'] and sys.platform == 'darwin':
+            return False
+            
+        return False
+    except:
+        return False  # 出错时假设不是云环境
+
+# 配置PyVista用于云环境
+def configure_pyvista_for_cloud():
+    """为云环境配置PyVista"""
+    is_cloud = is_cloud_environment()
+    if is_cloud:
+        try:
+            # 设置PyVista为离屏模式
+            pv.OFF_SCREEN = True
+            # 设置环境变量
+            os.environ['PYVISTA_OFF_SCREEN'] = 'true'
+            os.environ['PYVISTA_USE_PANEL'] = 'false'
+            # 尝试启动虚拟显示器（如果可用）
+            try:
+                pv.start_xvfb()
+            except:
+                pass  # 如果xvfb不可用，忽略错误
+        except Exception as e:
+            # 在Streamlit中显示警告（如果可用）
+            try:
+                st.warning(f"PyVista云环境配置警告: {str(e)}")
+            except:
+                print(f"PyVista云环境配置警告: {str(e)}")
+    
+    # 调试信息（可选）
+    # print(f"云环境检测结果: {is_cloud}")
+    # print(f"PyVista OFF_SCREEN: {pv.OFF_SCREEN}")
+
+# 初始化PyVista配置
+configure_pyvista_for_cloud()
 
 # 导入预测测试所需的库
 try:
@@ -1767,6 +1833,11 @@ elif page == "🎨 三维可视化":
     st.title("🎨 三维可视化")
     st.markdown("---")
     
+    # 检测云环境并显示警告
+    if is_cloud_environment():
+        st.warning("⚠️ 检测到云环境：交互式3D窗口可能不可用，系统将自动切换到静态图像模式")
+        st.info("💡 如需完整的交互式体验，请在本地环境中运行此应用")
+    
     # 检查是否有网格数据
     if st.session_state.mesh_data is None:
         st.warning("⚠️ 没有可用的网格数据，请先在'数据导入与保存'页面加载VTU文件")
@@ -1853,44 +1924,94 @@ elif page == "🎨 三维可视化":
                             scalars = None
                         
                         if viz_mode == "交互式窗口":
-                            # 创建交互式绘图器
-                            plotter = pv.Plotter(window_size=[800, 600])
-                            
-                            # 添加网格
-                            if scalars:
-                                plotter.add_mesh(
-                                    mesh,
-                                    scalars=scalars,
-                                    opacity=opacity_original,
-                                    cmap=cmap_original,
-                                    show_edges=show_edges_original,
-                                    edge_color='black',
-                                    show_scalar_bar=True
-                                )
-                            else:
-                                plotter.add_mesh(
-                                    mesh,
-                                    color='lightgray',
-                                    opacity=opacity_original,
-                                    show_edges=show_edges_original,
-                                    edge_color='black'
-                                )
-                            
-                            # 设置视角
-                            if view_option == "等轴测视图":
-                                plotter.view_isometric()
-                            elif view_option == "XY平面":
-                                plotter.view_xy()
-                            elif view_option == "XZ平面":
-                                plotter.view_xz()
-                            elif view_option == "YZ平面":
-                                plotter.view_yz()
-                            
-                            plotter.add_axes()
-                            
-                            # 显示交互式窗口
-                            st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
-                            plotter.show()
+                            # 检查是否在云环境中运行
+                            try:
+                                # 尝试创建交互式绘图器
+                                plotter = pv.Plotter(window_size=[800, 600])
+                                
+                                # 添加网格
+                                if scalars:
+                                    plotter.add_mesh(
+                                        mesh,
+                                        scalars=scalars,
+                                        opacity=opacity_original,
+                                        cmap=cmap_original,
+                                        show_edges=show_edges_original,
+                                        edge_color='black',
+                                        show_scalar_bar=True
+                                    )
+                                else:
+                                    plotter.add_mesh(
+                                        mesh,
+                                        color='lightgray',
+                                        opacity=opacity_original,
+                                        show_edges=show_edges_original,
+                                        edge_color='black'
+                                    )
+                                
+                                # 设置视角
+                                if view_option == "等轴测视图":
+                                    plotter.view_isometric()
+                                elif view_option == "XY平面":
+                                    plotter.view_xy()
+                                elif view_option == "XZ平面":
+                                    plotter.view_xz()
+                                elif view_option == "YZ平面":
+                                    plotter.view_yz()
+                                
+                                plotter.add_axes()
+                                
+                                # 显示交互式窗口
+                                st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
+                                plotter.show()
+                                
+                            except Exception as interactive_error:
+                                # 如果交互式模式失败，自动切换到静态图像模式
+                                st.warning(f"⚠️ 交互式窗口不可用 (云环境限制): {str(interactive_error)}")
+                                st.info("🔄 自动切换到静态图像模式...")
+                                
+                                # 创建离屏绘图器用于静态图像
+                                plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
+                                
+                                # 添加网格
+                                if scalars:
+                                    plotter.add_mesh(
+                                        mesh,
+                                        scalars=scalars,
+                                        opacity=opacity_original,
+                                        cmap=cmap_original,
+                                        show_edges=show_edges_original,
+                                        edge_color='black',
+                                        show_scalar_bar=True
+                                    )
+                                else:
+                                    plotter.add_mesh(
+                                        mesh,
+                                        color='lightgray',
+                                        opacity=opacity_original,
+                                        show_edges=show_edges_original,
+                                        edge_color='black'
+                                    )
+                                
+                                # 设置视角
+                                if view_option == "等轴测视图":
+                                    plotter.view_isometric()
+                                elif view_option == "XY平面":
+                                    plotter.view_xy()
+                                elif view_option == "XZ平面":
+                                    plotter.view_xz()
+                                elif view_option == "YZ平面":
+                                    plotter.view_yz()
+                                
+                                plotter.add_axes()
+                                
+                                # 截图并显示
+                                plotter.show(auto_close=False)
+                                image = plotter.screenshot()
+                                plotter.close()
+                                
+                                # 在Streamlit中显示图像
+                                st.image(image, caption="原始网格可视化 (静态模式)", use_column_width=True)
                             
                         else:
                             # 创建离屏绘图器用于静态图像
@@ -2051,51 +2172,108 @@ elif page == "🎨 三维可视化":
                             warped = warped.warp_by_vector("displacement", factor=deform_factor)
                             
                             if viz_mode_deform == "交互式窗口":
-                                # 创建交互式绘图器
-                                plotter = pv.Plotter(window_size=[800, 600])
-                                
-                                # 显示原始网格
-                                if show_original:
+                                # 检查是否在云环境中运行
+                                try:
+                                    # 尝试创建交互式绘图器
+                                    plotter = pv.Plotter(window_size=[800, 600])
+                                    
+                                    # 显示原始网格
+                                    if show_original:
+                                        plotter.add_mesh(
+                                            mesh,
+                                            color="gray",
+                                            opacity=0.3,
+                                            show_edges=True,
+                                            edge_color='black',
+                                            label="Original"
+                                        )
+                                    
+                                    # 显示变形网格
                                     plotter.add_mesh(
-                                        mesh,
-                                        color="gray",
-                                        opacity=0.3,
+                                        warped,
+                                        scalars="displacement_magnitude",
+                                        opacity=opacity_deform,
+                                        cmap=cmap_deform,
                                         show_edges=True,
                                         edge_color='black',
-                                        label="Original"
+                                        label=f"Deformed (×{deform_factor})",
+                                        show_scalar_bar=True,
+                                        scalar_bar_args={"title": "Displacement"}
                                     )
-                                
-                                # 显示变形网格
-                                plotter.add_mesh(
-                                    warped,
-                                    scalars="displacement_magnitude",
-                                    opacity=opacity_deform,
-                                    cmap=cmap_deform,
-                                    show_edges=True,
-                                    edge_color='black',
-                                    label=f"Deformed (×{deform_factor})",
-                                    show_scalar_bar=True,
-                                    scalar_bar_args={"title": "Displacement"}
-                                )
-                                
-                                # 设置视角和其他元素
-                                plotter.add_legend()
-                                
-                                # 设置视角
-                                if view_option_deform == "等轴测视图":
-                                    plotter.view_isometric()
-                                elif view_option_deform == "XY平面":
-                                    plotter.view_xy()
-                                elif view_option_deform == "XZ平面":
-                                    plotter.view_xz()
-                                elif view_option_deform == "YZ平面":
-                                    plotter.view_yz()
-                                
-                                plotter.add_axes()
-                                
-                                # 显示交互式窗口
-                                st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
-                                plotter.show()
+                                    
+                                    # 设置视角和其他元素
+                                    plotter.add_legend()
+                                    
+                                    # 设置视角
+                                    if view_option_deform == "等轴测视图":
+                                        plotter.view_isometric()
+                                    elif view_option_deform == "XY平面":
+                                        plotter.view_xy()
+                                    elif view_option_deform == "XZ平面":
+                                        plotter.view_xz()
+                                    elif view_option_deform == "YZ平面":
+                                        plotter.view_yz()
+                                    
+                                    plotter.add_axes()
+                                    
+                                    # 显示交互式窗口
+                                    st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
+                                    plotter.show()
+                                    
+                                except Exception as interactive_error:
+                                    # 如果交互式模式失败，自动切换到静态图像模式
+                                    st.warning(f"⚠️ 交互式窗口不可用 (云环境限制): {str(interactive_error)}")
+                                    st.info("🔄 自动切换到静态图像模式...")
+                                    
+                                    # 创建离屏绘图器用于静态图像
+                                    plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
+                                    
+                                    # 显示原始网格
+                                    if show_original:
+                                        plotter.add_mesh(
+                                            mesh,
+                                            color="gray",
+                                            opacity=0.3,
+                                            show_edges=True,
+                                            edge_color='black',
+                                            label="Original"
+                                        )
+                                    
+                                    # 显示变形网格
+                                    plotter.add_mesh(
+                                        warped,
+                                        scalars="displacement_magnitude",
+                                        opacity=opacity_deform,
+                                        cmap=cmap_deform,
+                                        show_edges=True,
+                                        edge_color='black',
+                                        label=f"Deformed (×{deform_factor})",
+                                        show_scalar_bar=True,
+                                        scalar_bar_args={"title": "Displacement"}
+                                    )
+                                    
+                                    # 设置视角和其他元素
+                                    plotter.add_legend()
+                                    
+                                    # 设置视角
+                                    if view_option_deform == "等轴测视图":
+                                        plotter.view_isometric()
+                                    elif view_option_deform == "XY平面":
+                                        plotter.view_xy()
+                                    elif view_option_deform == "XZ平面":
+                                        plotter.view_xz()
+                                    elif view_option_deform == "YZ平面":
+                                        plotter.view_yz()
+                                    
+                                    plotter.add_axes()
+                                    
+                                    # 截图并显示
+                                    plotter.show(auto_close=False)
+                                    image = plotter.screenshot()
+                                    plotter.close()
+                                    
+                                    # 在Streamlit中显示图像
+                                    st.image(image, caption=f"形变对比图 (静态模式, 放大系数: {deform_factor})", use_column_width=True)
                                 
                             else:
                                 # 创建离屏绘图器用于静态图像
@@ -2302,49 +2480,104 @@ elif page == "🎨 三维可视化":
                             colors[~above_threshold] = low_color_rgb + [low_error_opacity]
                             
                             if viz_mode_error == "交互式窗口":
-                                # 创建交互式绘图器
-                                plotter = pv.Plotter(window_size=[800, 600])
-                                
-                                # 添加网格 - 使用两个不同的网格来显示不同颜色
-                                # 首先添加低误差点
-                                if np.any(~above_threshold):
-                                    mesh_low = mesh.extract_points(~above_threshold)
-                                    plotter.add_mesh(
-                                        mesh_low,
-                                        color=low_color_rgb,
-                                        opacity=low_error_opacity,
-                                        show_edges=show_edges_error,
-                                        edge_color='black',
-                                        label=f"误差 < {threshold:.4f}"
+                                # 检查是否在云环境中运行
+                                try:
+                                    # 尝试创建交互式绘图器
+                                    plotter = pv.Plotter(window_size=[800, 600])
+                                    
+                                    # 添加网格 - 使用两个不同的网格来显示不同颜色
+                                    # 首先添加低误差点
+                                    if np.any(~above_threshold):
+                                        mesh_low = mesh.extract_points(~above_threshold)
+                                        plotter.add_mesh(
+                                            mesh_low,
+                                            color=low_color_rgb,
+                                            opacity=low_error_opacity,
+                                            show_edges=show_edges_error,
+                                            edge_color='black',
+                                            label=f"误差 < {threshold:.4f}"
+                                        )
+                                    
+                                    # 然后添加高误差点
+                                    if np.any(above_threshold):
+                                        mesh_high = mesh.extract_points(above_threshold)
+                                        plotter.add_mesh(
+                                            mesh_high,
+                                            color=high_color_rgb,
+                                            opacity=high_error_opacity,
+                                            show_edges=show_edges_error,
+                                            edge_color='black',
+                                            label=f"误差 > {threshold:.4f}"
+                                        )
+                                    
+                                    # 添加标题和其他元素
+                                    plotter.add_text(
+                                        f"预测误差分布 - 验证点 {result['validation_idx']+1}",
+                                        position='upper_edge',
+                                        font_size=12,
+                                        color='black'
                                     )
-                                
-                                # 然后添加高误差点
-                                if np.any(above_threshold):
-                                    mesh_high = mesh.extract_points(above_threshold)
-                                    plotter.add_mesh(
-                                        mesh_high,
-                                        color=high_color_rgb,
-                                        opacity=high_error_opacity,
-                                        show_edges=show_edges_error,
-                                        edge_color='black',
-                                        label=f"误差 > {threshold:.4f}"
+                                    
+                                    plotter.add_legend()
+                                    plotter.view_isometric()
+                                    plotter.add_axes()
+                                    
+                                    # 显示交互式窗口
+                                    st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
+                                    plotter.show()
+                                    
+                                except Exception as interactive_error:
+                                    # 如果交互式模式失败，自动切换到静态图像模式
+                                    st.warning(f"⚠️ 交互式窗口不可用 (云环境限制): {str(interactive_error)}")
+                                    st.info("🔄 自动切换到静态图像模式...")
+                                    
+                                    # 创建离屏绘图器用于静态图像
+                                    plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
+                                    
+                                    # 添加网格 - 使用两个不同的网格来显示不同颜色
+                                    # 首先添加低误差点
+                                    if np.any(~above_threshold):
+                                        mesh_low = mesh.extract_points(~above_threshold)
+                                        plotter.add_mesh(
+                                            mesh_low,
+                                            color=low_color_rgb,
+                                            opacity=low_error_opacity,
+                                            show_edges=show_edges_error,
+                                            edge_color='black',
+                                            label=f"误差 < {threshold:.4f}"
+                                        )
+                                    
+                                    # 然后添加高误差点
+                                    if np.any(above_threshold):
+                                        mesh_high = mesh.extract_points(above_threshold)
+                                        plotter.add_mesh(
+                                            mesh_high,
+                                            color=high_color_rgb,
+                                            opacity=high_error_opacity,
+                                            show_edges=show_edges_error,
+                                            edge_color='black',
+                                            label=f"误差 > {threshold:.4f}"
+                                        )
+                                    
+                                    # 添加标题和其他元素
+                                    plotter.add_text(
+                                        f"预测误差分布 - 验证点 {result['validation_idx']+1}",
+                                        position='upper_edge',
+                                        font_size=12,
+                                        color='black'
                                     )
-                                
-                                # 添加标题和其他元素
-                                plotter.add_text(
-                                    f"预测误差分布 - 验证点 {result['validation_idx']+1}",
-                                    position='upper_edge',
-                                    font_size=12,
-                                    color='black'
-                                )
-                                
-                                plotter.add_legend()
-                                plotter.view_isometric()
-                                plotter.add_axes()
-                                
-                                # 显示交互式窗口
-                                st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
-                                plotter.show()
+                                    
+                                    plotter.add_legend()
+                                    plotter.view_isometric()
+                                    plotter.add_axes()
+                                    
+                                    # 截图并显示
+                                    plotter.show(auto_close=False)
+                                    image = plotter.screenshot()
+                                    plotter.close()
+                                    
+                                    # 在Streamlit中显示图像
+                                    st.image(image, caption="预测误差分布图 (静态模式)", use_column_width=True)
                                 
                             else:
                                 # 创建离屏绘图器用于静态图像
