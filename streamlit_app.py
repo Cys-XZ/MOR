@@ -16,7 +16,11 @@ def is_cloud_environment():
     """检测是否在云环境中运行（没有图形界面）"""
     try:
         # 检查是否在常见的云平台上
-        cloud_indicators = ['STREAMLIT_SHARING', 'HEROKU', 'RAILWAY', 'RENDER', 'VERCEL', 'STREAMLIT_CLOUD']
+        cloud_indicators = [
+            'STREAMLIT_SHARING', 'STREAMLIT_CLOUD', 'STREAMLIT_SERVER_HEADLESS',
+            'HEROKU', 'RAILWAY', 'RENDER', 'VERCEL', 'REPLIT_CLUSTER',
+            'CODESPACE_NAME', 'GITPOD_WORKSPACE_ID'
+        ]
         if any(indicator in os.environ for indicator in cloud_indicators):
             return True
         
@@ -2545,56 +2549,30 @@ elif page == "🎨 三维可视化":
                                     st.error(f"❌ 交互式和备选方案都失败了: {error_msg}")
                                     viz_mode_deform = "静态图像"  # 强制切换到静态模式
                                 
-                            else:
-                                # 创建离屏绘图器用于静态图像
-                                plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
-                                
-                                # 显示原始网格
-                                if show_original:
-                                    plotter.add_mesh(
-                                        mesh,
-                                        color="gray",
-                                        opacity=0.3,
+                            if viz_mode_deform == "静态图像" or is_cloud_environment():
+                                # 使用云环境友好的可视化函数
+                                try:
+                                    # 为形变网格创建一个组合可视化
+                                    image, method = create_cloud_friendly_plot(
+                                        warped,
+                                        scalars=displacement_magnitude,
+                                        cmap=cmap_deform,
+                                        opacity=opacity_deform,
                                         show_edges=True,
-                                        edge_color='black',
-                                        label="Original"
+                                        title=f"形变对比图 (×{deform_factor})"
                                     )
-                                
-                                # 显示变形网格
-                                plotter.add_mesh(
-                                    warped,
-                                    scalars="displacement_magnitude",
-                                    opacity=opacity_deform,
-                                    cmap=cmap_deform,
-                                    show_edges=True,
-                                    edge_color='black',
-                                    label=f"Deformed (×{deform_factor})",
-                                    show_scalar_bar=True,
-                                    scalar_bar_args={"title": "Displacement"}
-                                )
-                                
-                                # 设置视角和其他元素
-                                plotter.add_legend()
-                                
-                                # 设置视角
-                                if view_option_deform == "等轴测视图":
-                                    plotter.view_isometric()
-                                elif view_option_deform == "XY平面":
-                                    plotter.view_xy()
-                                elif view_option_deform == "XZ平面":
-                                    plotter.view_xz()
-                                elif view_option_deform == "YZ平面":
-                                    plotter.view_yz()
-                                
-                                plotter.add_axes()
-                                
-                                # 截图并显示
-                                plotter.show(auto_close=False)
-                                image = plotter.screenshot()
-                                plotter.close()
-                                
-                                # 在Streamlit中显示图像
-                                st.image(image, caption=f"形变对比图 (放大系数: {deform_factor})", use_column_width=True)
+                                    
+                                    # 显示图像
+                                    if isinstance(image, bytes):
+                                        st.image(image, caption=f"形变对比图 ({method}, 放大系数: {deform_factor})", use_column_width=True)
+                                    else:
+                                        st.image(image, caption=f"形变对比图 ({method}, 放大系数: {deform_factor})", use_column_width=True)
+                                    
+                                    st.success(f"✅ 使用 {method} 成功生成形变对比图")
+                                    
+                                except Exception as fallback_error:
+                                    st.error(f"❌ 所有形变可视化方法都失败了: {str(fallback_error)}")
+                                    st.info("💡 建议：尝试在本地环境运行以获得完整的3D可视化功能")
                             
                             # 显示统计信息
                             st.info(f"""
@@ -2855,54 +2833,30 @@ elif page == "🎨 三维可视化":
                                     st.error(f"❌ 交互式和备选方案都失败了: {error_msg}")
                                     viz_mode_error = "静态图像"  # 强制切换到静态模式
                                 
-                            else:
-                                # 创建离屏绘图器用于静态图像
-                                plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
-                                
-                                # 添加网格 - 使用两个不同的网格来显示不同颜色
-                                # 首先添加低误差点
-                                if np.any(~above_threshold):
-                                    mesh_low = mesh.extract_points(~above_threshold)
-                                    plotter.add_mesh(
-                                        mesh_low,
-                                        color=low_color_rgb,
-                                        opacity=low_error_opacity,
+                            if viz_mode_error == "静态图像" or is_cloud_environment():
+                                # 使用云环境友好的可视化函数
+                                try:
+                                    # 使用误差数据作为标量进行可视化
+                                    image, method = create_cloud_friendly_plot(
+                                        mesh,
+                                        scalars=error,
+                                        cmap='RdBu_r',  # 红蓝色图，红色表示高误差
+                                        opacity=0.8,
                                         show_edges=show_edges_error,
-                                        edge_color='black',
-                                        label=f"Error < {threshold:.4f}"
+                                        title=f"预测误差分布 - 验证点 {result['validation_idx']+1}"
                                     )
-                                
-                                # 然后添加高误差点
-                                if np.any(above_threshold):
-                                    mesh_high = mesh.extract_points(above_threshold)
-                                    plotter.add_mesh(
-                                        mesh_high,
-                                        color=high_color_rgb,
-                                        opacity=high_error_opacity,
-                                        show_edges=show_edges_error,
-                                        edge_color='black',
-                                        label=f"Error > {threshold:.4f}"
-                                    )
-                                
-                                # 添加标题和其他元素（使用英文避免中文显示问题）
-                                plotter.add_text(
-                                    f"Error Distribution - Point {result['validation_idx']+1}",
-                                    position='upper_edge',
-                                    font_size=12,
-                                    color='black'
-                                )
-                                
-                                plotter.add_legend()
-                                plotter.view_isometric()
-                                plotter.add_axes()
-                                
-                                # 截图并显示
-                                plotter.show(auto_close=False)
-                                image = plotter.screenshot()
-                                plotter.close()
-                                
-                                # 在Streamlit中显示图像
-                                st.image(image, caption="预测误差分布图", use_column_width=True)
+                                    
+                                    # 显示图像
+                                    if isinstance(image, bytes):
+                                        st.image(image, caption=f"预测误差分布图 ({method})", use_column_width=True)
+                                    else:
+                                        st.image(image, caption=f"预测误差分布图 ({method})", use_column_width=True)
+                                    
+                                    st.success(f"✅ 使用 {method} 成功生成误差分布图")
+                                    
+                                except Exception as fallback_error:
+                                    st.error(f"❌ 所有误差可视化方法都失败了: {str(fallback_error)}")
+                                    st.info("💡 建议：尝试在本地环境运行以获得完整的3D可视化功能")
                             
                             # 显示误差统计
                             st.info(f"""
