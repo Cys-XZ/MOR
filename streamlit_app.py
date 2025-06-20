@@ -71,7 +71,8 @@ def configure_pyvista_for_cloud():
         try:
             # 设置PyVista为离屏模式
             pv.OFF_SCREEN = True
-            # 设置环境变量
+            
+            # 设置环境变量（云端无头环境）
             os.environ['PYVISTA_OFF_SCREEN'] = 'true'
             os.environ['PYVISTA_USE_PANEL'] = 'false'
             os.environ['PYVISTA_JUPYTER_BACKEND'] = 'static'
@@ -80,11 +81,40 @@ def configure_pyvista_for_cloud():
             os.environ['MESA_GL_VERSION_OVERRIDE'] = '3.3'
             os.environ['MESA_GLSL_VERSION_OVERRIDE'] = '330'
             
+            # 设置X11相关环境变量（避免libXrender错误）
+            os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+            os.environ['DISPLAY'] = ':99'
+            os.environ['LIBGL_ALWAYS_INDIRECT'] = '1'
+            os.environ['LIBGL_ALWAYS_SOFTWARE'] = '1'
+            
+            # 禁用Qt相关的图形功能
+            os.environ['QT_QPA_FONTDIR'] = '/usr/share/fonts'
+            os.environ['MPLBACKEND'] = 'Agg'
+            
             # 尝试启动虚拟显示器（如果可用）
             try:
+                # 首先尝试使用xvfbwrapper
+                try:
+                    from xvfbwrapper import Xvfb
+                    vdisplay = Xvfb(width=1280, height=720, colordepth=24)
+                    vdisplay.start()
+                    print("✅ Xvfb虚拟显示器启动成功")
+                except ImportError:
+                    print("⚠️ xvfbwrapper未安装，尝试直接启动Xvfb")
+                    # 尝试直接启动Xvfb
+                    import subprocess
+                    subprocess.Popen(['Xvfb', ':99', '-screen', '0', '1280x720x24'], 
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    print("✅ 直接启动Xvfb成功")
+                except Exception as e:
+                    print(f"⚠️ 无法启动Xvfb: {e}")
+                
+                # 然后尝试PyVista的xvfb
                 pv.start_xvfb()
-            except:
-                pass  # 如果xvfb不可用，忽略错误
+                print("✅ PyVista Xvfb启动成功")
+            except Exception as e:
+                print(f"⚠️ 虚拟显示器启动失败: {e}")
+                # 即使Xvfb失败，也继续运行（使用纯软件渲染）
                 
         except Exception as e:
             # 在Streamlit中显示警告（如果可用）
@@ -129,11 +159,17 @@ def create_pyvista_plot(mesh, scalars=None, cmap='viridis', opacity=0.8, show_ed
     pv.OFF_SCREEN = True
     
     try:
+        # 在云端环境中设置额外的安全措施
+        if is_cloud_environment():
+            # 确保使用软件渲染
+            os.environ['LIBGL_ALWAYS_SOFTWARE'] = '1'
+            os.environ['GALLIUM_DRIVER'] = 'llvmpipe'
+            
         # 创建绘图器
         plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
         
         # 添加网格
-        if scalars:
+        if scalars is not None:
             plotter.add_mesh(
                 mesh,
                 scalars=scalars,
@@ -162,7 +198,12 @@ def create_pyvista_plot(mesh, scalars=None, cmap='viridis', opacity=0.8, show_ed
         return image, "PyVista 3D"
         
     except Exception as e:
-        raise Exception(f"PyVista渲染失败: {str(e)}")
+        error_msg = str(e)
+        # 检查是否是图形库相关错误
+        if any(keyword in error_msg.lower() for keyword in ['libxrender', 'libgl', 'display', 'x11', 'opengl']):
+            raise Exception(f"图形库错误 (云端环境): {error_msg}")
+        else:
+            raise Exception(f"PyVista渲染失败: {error_msg}")
 
 def create_matplotlib_3d_plot(mesh, scalars=None, cmap='viridis', opacity=0.8, show_edges=True, title="3D Visualization"):
     """使用matplotlib创建3D图像作为备选"""
