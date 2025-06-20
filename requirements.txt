@@ -10,7 +10,7 @@ pandas>=1.3.0,<3.0.0
 matplotlib>=3.5.0,<4.0.0
 scipy>=1.7.0,<2.0.0
 
-# Machine learning
+# Machine learning and data science
 scikit-learn>=1.0.0,<2.0.0
 
 # Deep learning
@@ -23,14 +23,18 @@ vtk>=9.0.0,<10.0.0
 # Model order reduction
 ezyrb>=1.2.0,<2.0.0
 
-# Image processing and I/O
+# Image processing (used by PIL/Pillow in some modules)
 pillow>=8.0.0,<11.0.0
 
 # Utility libraries
 joblib>=1.0.0,<2.0.0
 
-# Cloud environment support (Linux)
+# Cloud environment support (Linux only)
 xvfbwrapper>=0.2.9; platform_system=="Linux"
 
 # GUI support for PyVista interactive windows (optional, local only)
 PyQt5>=5.15.0; platform_system=="Windows" or platform_system=="Darwin"
+
+# Note: The following are Python standard library modules and don't need to be installed:
+# - os, sys, tempfile, pathlib, subprocess, shutil, time, warnings, io, tracemalloc
+# - mpl_toolkits (part of matplotlib)
