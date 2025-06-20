@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import warnings
 import pandas as pd
 from extract_displacement_components import list_available_deltats, extract_displacement_components, visualize_displacement
+import torch.nn as nn
 
 # 导入预测测试所需的库
 try:
