@@ -46,10 +46,27 @@ def is_cloud_environment():
     except:
         return False  # 出错时假设不是云环境
 
-# 配置PyVista用于云环境
+# 配置PyVista用于云环境和中文支持
 def configure_pyvista_for_cloud():
-    """为云环境配置PyVista"""
+    """为云环境配置PyVista并设置中文支持"""
     is_cloud = is_cloud_environment()
+    
+    # 设置中文字体支持
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.font_manager as fm
+        
+        # 设置matplotlib中文字体
+        plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial Unicode MS', 'Microsoft YaHei']
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        # 设置PyVista的matplotlib后端
+        pv.global_theme.font.family = 'arial'
+        pv.global_theme.font.size = 12
+        
+    except Exception as e:
+        print(f"字体配置警告: {str(e)}")
+    
     if is_cloud:
         try:
             # 设置PyVista为离屏模式
@@ -57,21 +74,254 @@ def configure_pyvista_for_cloud():
             # 设置环境变量
             os.environ['PYVISTA_OFF_SCREEN'] = 'true'
             os.environ['PYVISTA_USE_PANEL'] = 'false'
+            os.environ['PYVISTA_JUPYTER_BACKEND'] = 'static'
+            
+            # 禁用GPU相关功能
+            os.environ['MESA_GL_VERSION_OVERRIDE'] = '3.3'
+            os.environ['MESA_GLSL_VERSION_OVERRIDE'] = '330'
+            
             # 尝试启动虚拟显示器（如果可用）
             try:
                 pv.start_xvfb()
             except:
                 pass  # 如果xvfb不可用，忽略错误
+                
         except Exception as e:
             # 在Streamlit中显示警告（如果可用）
             try:
                 st.warning(f"PyVista云环境配置警告: {str(e)}")
             except:
                 print(f"PyVista云环境配置警告: {str(e)}")
+    else:
+        # 本地环境配置
+        try:
+            # 确保离屏模式关闭（本地交互式使用）
+            pv.OFF_SCREEN = False
+            # 设置默认主题
+            pv.set_plot_theme("document")
+            
+        except Exception as e:
+            print(f"PyVista本地环境配置警告: {str(e)}")
     
     # 调试信息（可选）
     # print(f"云环境检测结果: {is_cloud}")
     # print(f"PyVista OFF_SCREEN: {pv.OFF_SCREEN}")
+
+# 创建云环境友好的3D可视化函数
+def create_cloud_friendly_plot(mesh, **kwargs):
+    """创建云环境友好的3D图像"""
+    try:
+        # 方法1: 使用PyVista离屏渲染
+        return create_pyvista_plot(mesh, **kwargs)
+    except Exception as e1:
+        try:
+            # 方法2: 使用matplotlib 3D替代
+            return create_matplotlib_3d_plot(mesh, **kwargs)
+        except Exception as e2:
+            # 方法3: 使用2D投影图
+            return create_2d_projection_plot(mesh, **kwargs)
+
+def create_pyvista_plot(mesh, scalars=None, cmap='viridis', opacity=0.8, show_edges=True, title="3D Visualization"):
+    """使用PyVista创建3D图像"""
+    import pyvista as pv
+    
+    # 强制设置离屏模式
+    pv.OFF_SCREEN = True
+    
+    try:
+        # 创建绘图器
+        plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
+        
+        # 添加网格
+        if scalars:
+            plotter.add_mesh(
+                mesh,
+                scalars=scalars,
+                cmap=cmap,
+                opacity=opacity,
+                show_edges=show_edges,
+                show_scalar_bar=True
+            )
+        else:
+            plotter.add_mesh(
+                mesh,
+                color='lightgray',
+                opacity=opacity,
+                show_edges=show_edges
+            )
+        
+        # 设置视角
+        plotter.view_isometric()
+        plotter.add_axes()
+        
+        # 生成图像
+        plotter.show(auto_close=False)
+        image = plotter.screenshot()
+        plotter.close()
+        
+        return image, "PyVista 3D"
+        
+    except Exception as e:
+        raise Exception(f"PyVista渲染失败: {str(e)}")
+
+def create_matplotlib_3d_plot(mesh, scalars=None, cmap='viridis', opacity=0.8, show_edges=True, title="3D Visualization"):
+    """使用matplotlib创建3D图像作为备选"""
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    
+    try:
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # 获取网格点
+        points = mesh.points
+        
+        if scalars is not None and len(scalars) == len(points):
+            # 使用标量数据着色
+            scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], 
+                               c=scalars, cmap=cmap, s=1, alpha=opacity)
+            plt.colorbar(scatter, ax=ax, shrink=0.5)
+        else:
+            # 简单的点云显示
+            ax.scatter(points[:, 0], points[:, 1], points[:, 2], 
+                      c='blue', s=1, alpha=opacity)
+        
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title(title)
+        
+        # 设置等比例
+        max_range = np.array([points[:, 0].max()-points[:, 0].min(),
+                             points[:, 1].max()-points[:, 1].min(),
+                             points[:, 2].max()-points[:, 2].min()]).max() / 2.0
+        mid_x = (points[:, 0].max()+points[:, 0].min()) * 0.5
+        mid_y = (points[:, 1].max()+points[:, 1].min()) * 0.5
+        mid_z = (points[:, 2].max()+points[:, 2].min()) * 0.5
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+        
+        # 保存为图像
+        import io
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
+        
+        return buf.getvalue(), "Matplotlib 3D"
+        
+    except Exception as e:
+        raise Exception(f"Matplotlib 3D渲染失败: {str(e)}")
+
+def create_2d_projection_plot(mesh, scalars=None, cmap='viridis', opacity=0.8, show_edges=True, title="2D Projection"):
+    """创建2D投影图作为最后备选"""
+    import matplotlib.pyplot as plt
+    
+    try:
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12, 10))
+        
+        points = mesh.points
+        
+        # XY投影
+        if scalars is not None and len(scalars) == len(points):
+            scatter1 = ax1.scatter(points[:, 0], points[:, 1], c=scalars, cmap=cmap, s=1, alpha=opacity)
+            plt.colorbar(scatter1, ax=ax1)
+        else:
+            ax1.scatter(points[:, 0], points[:, 1], c='blue', s=1, alpha=opacity)
+        ax1.set_xlabel('X')
+        ax1.set_ylabel('Y')
+        ax1.set_title('XY投影')
+        ax1.grid(True, alpha=0.3)
+        
+        # XZ投影
+        if scalars is not None and len(scalars) == len(points):
+            scatter2 = ax2.scatter(points[:, 0], points[:, 2], c=scalars, cmap=cmap, s=1, alpha=opacity)
+        else:
+            ax2.scatter(points[:, 0], points[:, 2], c='blue', s=1, alpha=opacity)
+        ax2.set_xlabel('X')
+        ax2.set_ylabel('Z')
+        ax2.set_title('XZ投影')
+        ax2.grid(True, alpha=0.3)
+        
+        # YZ投影
+        if scalars is not None and len(scalars) == len(points):
+            scatter3 = ax3.scatter(points[:, 1], points[:, 2], c=scalars, cmap=cmap, s=1, alpha=opacity)
+        else:
+            ax3.scatter(points[:, 1], points[:, 2], c='blue', s=1, alpha=opacity)
+        ax3.set_xlabel('Y')
+        ax3.set_ylabel('Z')
+        ax3.set_title('YZ投影')
+        ax3.grid(True, alpha=0.3)
+        
+        # 统计信息
+        ax4.axis('off')
+        stats_text = f"""
+        网格统计信息:
+        • 点数: {mesh.n_points}
+        • 单元数: {mesh.n_cells}
+        • X范围: [{points[:, 0].min():.3f}, {points[:, 0].max():.3f}]
+        • Y范围: [{points[:, 1].min():.3f}, {points[:, 1].max():.3f}]
+        • Z范围: [{points[:, 2].min():.3f}, {points[:, 2].max():.3f}]
+        """
+        if scalars is not None:
+            stats_text += f"\n• 标量范围: [{scalars.min():.3f}, {scalars.max():.3f}]"
+        
+        ax4.text(0.1, 0.5, stats_text, transform=ax4.transAxes, fontsize=10,
+                verticalalignment='center', bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+        
+        plt.suptitle(title)
+        plt.tight_layout()
+        
+        # 保存为图像
+        import io
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
+        
+        return buf.getvalue(), "2D Projections"
+        
+    except Exception as e:
+        raise Exception(f"2D投影渲染失败: {str(e)}")
+
+# 创建安全的交互式窗口函数
+def create_safe_interactive_window(plotter_func, fallback_func=None):
+    """创建安全的交互式窗口，处理中文显示和窗口管理问题"""
+    try:
+        # 重置PyVista状态
+        pv.close_all()
+        
+        # 确保本地环境下的正确设置
+        if not is_cloud_environment():
+            pv.OFF_SCREEN = False
+            pv.set_plot_theme("document")
+        
+        # 执行绘图函数
+        result = plotter_func()
+        
+        # 强制关闭所有窗口以避免残留
+        pv.close_all()
+        
+        return result, None
+        
+    except Exception as e:
+        # 清理可能的残留窗口
+        try:
+            pv.close_all()
+        except:
+            pass
+        
+        error_msg = str(e)
+        
+        # 如果有备选方案，尝试执行
+        if fallback_func:
+            try:
+                return fallback_func(), f"交互式窗口失败，使用备选方案: {error_msg}"
+            except Exception as fallback_error:
+                return None, f"交互式和备选方案都失败: {error_msg}, {str(fallback_error)}"
+        
+        return None, error_msg
 
 # 初始化PyVista配置
 configure_pyvista_for_cloud()
@@ -1910,33 +2160,35 @@ elif page == "🎨 三维可视化":
             if st.button("🎨 生成原始图", type="primary", key="btn_original"):
                 with st.spinner("正在生成三维可视化..."):
                     try:
-                        import pyvista as pv
-                        pv.set_plot_theme("document")
-                        
                         # 复制网格数据
                         mesh = st.session_state.mesh_data.copy()
                         
-                        # 如果有选中的数据，添加到网格
-                        if selected_array and selected_array in mesh.array_names:
-                            mesh.set_active_scalars(selected_array)
-                            scalars = selected_array
-                        else:
-                            scalars = None
+                        # 准备可视化参数
+                        viz_kwargs = {
+                            'scalars': selected_array if selected_array and selected_array in mesh.array_names else None,
+                            'cmap': cmap_original,
+                            'opacity': opacity_original,
+                            'show_edges': show_edges_original,
+                            'title': "原始网格可视化"
+                        }
                         
-                        if viz_mode == "交互式窗口":
-                            # 检查是否在云环境中运行
-                            try:
-                                # 尝试创建交互式绘图器
+                        if viz_mode == "交互式窗口" and not is_cloud_environment():
+                            # 本地环境尝试交互式窗口
+                            def create_interactive_plot():
+                                import pyvista as pv
+                                pv.set_plot_theme("document")
+                                
                                 plotter = pv.Plotter(window_size=[800, 600])
                                 
                                 # 添加网格
-                                if scalars:
+                                if viz_kwargs['scalars']:
+                                    mesh.set_active_scalars(viz_kwargs['scalars'])
                                     plotter.add_mesh(
                                         mesh,
-                                        scalars=scalars,
-                                        opacity=opacity_original,
-                                        cmap=cmap_original,
-                                        show_edges=show_edges_original,
+                                        scalars=viz_kwargs['scalars'],
+                                        opacity=viz_kwargs['opacity'],
+                                        cmap=viz_kwargs['cmap'],
+                                        show_edges=viz_kwargs['show_edges'],
                                         edge_color='black',
                                         show_scalar_bar=True
                                     )
@@ -1944,8 +2196,8 @@ elif page == "🎨 三维可视化":
                                     plotter.add_mesh(
                                         mesh,
                                         color='lightgray',
-                                        opacity=opacity_original,
-                                        show_edges=show_edges_original,
+                                        opacity=viz_kwargs['opacity'],
+                                        show_edges=viz_kwargs['show_edges'],
                                         edge_color='black'
                                     )
                                 
@@ -1964,102 +2216,73 @@ elif page == "🎨 三维可视化":
                                 # 显示交互式窗口
                                 st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
                                 plotter.show()
-                                
-                            except Exception as interactive_error:
-                                # 如果交互式模式失败，自动切换到静态图像模式
-                                st.warning(f"⚠️ 交互式窗口不可用 (云环境限制): {str(interactive_error)}")
-                                st.info("🔄 自动切换到静态图像模式...")
-                                
-                                # 创建离屏绘图器用于静态图像
-                                plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
-                                
-                                # 添加网格
-                                if scalars:
-                                    plotter.add_mesh(
-                                        mesh,
-                                        scalars=scalars,
-                                        opacity=opacity_original,
-                                        cmap=cmap_original,
-                                        show_edges=show_edges_original,
-                                        edge_color='black',
-                                        show_scalar_bar=True
-                                    )
+                                return True
+                            
+                            def create_fallback_plot():
+                                # 设置标量数据
+                                if viz_kwargs['scalars']:
+                                    scalars_data = mesh.get_array(viz_kwargs['scalars'])
                                 else:
-                                    plotter.add_mesh(
-                                        mesh,
-                                        color='lightgray',
-                                        opacity=opacity_original,
-                                        show_edges=show_edges_original,
-                                        edge_color='black'
-                                    )
+                                    scalars_data = None
                                 
-                                # 设置视角
-                                if view_option == "等轴测视图":
-                                    plotter.view_isometric()
-                                elif view_option == "XY平面":
-                                    plotter.view_xy()
-                                elif view_option == "XZ平面":
-                                    plotter.view_xz()
-                                elif view_option == "YZ平面":
-                                    plotter.view_yz()
-                                
-                                plotter.add_axes()
-                                
-                                # 截图并显示
-                                plotter.show(auto_close=False)
-                                image = plotter.screenshot()
-                                plotter.close()
-                                
-                                # 在Streamlit中显示图像
-                                st.image(image, caption="原始网格可视化 (静态模式)", use_column_width=True)
-                            
-                        else:
-                            # 创建离屏绘图器用于静态图像
-                            plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
-                            
-                            # 添加网格
-                            if scalars:
-                                plotter.add_mesh(
-                                    mesh,
-                                    scalars=scalars,
-                                    opacity=opacity_original,
-                                    cmap=cmap_original,
-                                    show_edges=show_edges_original,
-                                    edge_color='black',
-                                    show_scalar_bar=True
-                                )
-                            else:
-                                plotter.add_mesh(
-                                    mesh,
-                                    color='lightgray',
-                                    opacity=opacity_original,
-                                    show_edges=show_edges_original,
-                                    edge_color='black'
+                                return create_cloud_friendly_plot(
+                                    mesh, 
+                                    scalars=scalars_data,
+                                    cmap=viz_kwargs['cmap'],
+                                    opacity=viz_kwargs['opacity'],
+                                    show_edges=viz_kwargs['show_edges'],
+                                    title=viz_kwargs['title']
                                 )
                             
-                            # 设置视角
-                            if view_option == "等轴测视图":
-                                plotter.view_isometric()
-                            elif view_option == "XY平面":
-                                plotter.view_xy()
-                            elif view_option == "XZ平面":
-                                plotter.view_xz()
-                            elif view_option == "YZ平面":
-                                plotter.view_yz()
+                            # 使用安全的交互式窗口函数
+                            result, error_msg = create_safe_interactive_window(create_interactive_plot, create_fallback_plot)
                             
-                            plotter.add_axes()
-                            
-                            # 截图并显示
-                            plotter.show(auto_close=False)
-                            image = plotter.screenshot()
-                            plotter.close()
-                            
-                            # 在Streamlit中显示图像
-                            st.image(image, caption="原始网格可视化", use_column_width=True)
+                            if error_msg:
+                                st.warning(f"⚠️ {error_msg}")
+                                if result:
+                                    # 显示备选方案的结果
+                                    image, method = result
+                                    if isinstance(image, bytes):
+                                        st.image(image, caption=f"{viz_kwargs['title']} ({method})", use_column_width=True)
+                                    else:
+                                        st.image(image, caption=f"{viz_kwargs['title']} ({method})", use_column_width=True)
+                                    st.success(f"✅ 使用 {method} 成功生成可视化图像")
+                                else:
+                                    viz_mode = "静态图像"  # 强制切换到静态模式
+                        
+                        if viz_mode == "静态图像" or is_cloud_environment():
+                            # 使用云环境友好的可视化函数
+                            try:
+                                # 设置标量数据
+                                if viz_kwargs['scalars']:
+                                    scalars_data = mesh.get_array(viz_kwargs['scalars'])
+                                else:
+                                    scalars_data = None
+                                
+                                image, method = create_cloud_friendly_plot(
+                                    mesh, 
+                                    scalars=scalars_data,
+                                    cmap=viz_kwargs['cmap'],
+                                    opacity=viz_kwargs['opacity'],
+                                    show_edges=viz_kwargs['show_edges'],
+                                    title=viz_kwargs['title']
+                                )
+                                
+                                # 显示图像
+                                if isinstance(image, bytes):
+                                    st.image(image, caption=f"{viz_kwargs['title']} ({method})", use_column_width=True)
+                                else:
+                                    st.image(image, caption=f"{viz_kwargs['title']} ({method})", use_column_width=True)
+                                
+                                st.success(f"✅ 使用 {method} 成功生成可视化图像")
+                                
+                            except Exception as fallback_error:
+                                st.error(f"❌ 所有可视化方法都失败了: {str(fallback_error)}")
+                                st.info("💡 建议：尝试在本地环境运行以获得完整的3D可视化功能")
                         
                         # 显示网格统计信息
-                        if scalars:
-                            scalar_data = mesh.get_array(scalars)
+                        if selected_array:
+                            scalar_data = mesh.get_array(selected_array)
                             st.info(f"""
                             📊 数据统计 ({selected_array}):
                             • 最大值: {scalar_data.max():.6f}
@@ -2172,8 +2395,8 @@ elif page == "🎨 三维可视化":
                             warped = warped.warp_by_vector("displacement", factor=deform_factor)
                             
                             if viz_mode_deform == "交互式窗口":
-                                # 检查是否在云环境中运行
-                                try:
+                                # 定义交互式绘图函数
+                                def create_deform_interactive():
                                     # 尝试创建交互式绘图器
                                     plotter = pv.Plotter(window_size=[800, 600])
                                     
@@ -2219,12 +2442,9 @@ elif page == "🎨 三维可视化":
                                     # 显示交互式窗口
                                     st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
                                     plotter.show()
-                                    
-                                except Exception as interactive_error:
-                                    # 如果交互式模式失败，自动切换到静态图像模式
-                                    st.warning(f"⚠️ 交互式窗口不可用 (云环境限制): {str(interactive_error)}")
-                                    st.info("🔄 自动切换到静态图像模式...")
-                                    
+                                    return True
+                                
+                                def create_deform_fallback():
                                     # 创建离屏绘图器用于静态图像
                                     plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
                                     
@@ -2271,9 +2491,18 @@ elif page == "🎨 三维可视化":
                                     plotter.show(auto_close=False)
                                     image = plotter.screenshot()
                                     plotter.close()
-                                    
-                                    # 在Streamlit中显示图像
-                                    st.image(image, caption=f"形变对比图 (静态模式, 放大系数: {deform_factor})", use_column_width=True)
+                                    return image
+                                
+                                # 使用安全的交互式窗口函数
+                                result, error_msg = create_safe_interactive_window(create_deform_interactive, create_deform_fallback)
+                                
+                                if error_msg and result:
+                                    st.warning(f"⚠️ {error_msg}")
+                                    # 显示备选方案的结果
+                                    st.image(result, caption=f"形变对比图 (静态模式, 放大系数: {deform_factor})", use_column_width=True)
+                                elif error_msg:
+                                    st.error(f"❌ 交互式和备选方案都失败了: {error_msg}")
+                                    viz_mode_deform = "静态图像"  # 强制切换到静态模式
                                 
                             else:
                                 # 创建离屏绘图器用于静态图像
@@ -2480,8 +2709,8 @@ elif page == "🎨 三维可视化":
                             colors[~above_threshold] = low_color_rgb + [low_error_opacity]
                             
                             if viz_mode_error == "交互式窗口":
-                                # 检查是否在云环境中运行
-                                try:
+                                # 定义交互式误差图函数
+                                def create_error_interactive():
                                     # 尝试创建交互式绘图器
                                     plotter = pv.Plotter(window_size=[800, 600])
                                     
@@ -2495,7 +2724,7 @@ elif page == "🎨 三维可视化":
                                             opacity=low_error_opacity,
                                             show_edges=show_edges_error,
                                             edge_color='black',
-                                            label=f"误差 < {threshold:.4f}"
+                                            label=f"Error < {threshold:.4f}"
                                         )
                                     
                                     # 然后添加高误差点
@@ -2507,12 +2736,12 @@ elif page == "🎨 三维可视化":
                                             opacity=high_error_opacity,
                                             show_edges=show_edges_error,
                                             edge_color='black',
-                                            label=f"误差 > {threshold:.4f}"
+                                            label=f"Error > {threshold:.4f}"
                                         )
                                     
-                                    # 添加标题和其他元素
+                                    # 添加标题和其他元素（使用英文避免中文显示问题）
                                     plotter.add_text(
-                                        f"预测误差分布 - 验证点 {result['validation_idx']+1}",
+                                        f"Error Distribution - Point {result['validation_idx']+1}",
                                         position='upper_edge',
                                         font_size=12,
                                         color='black'
@@ -2525,12 +2754,9 @@ elif page == "🎨 三维可视化":
                                     # 显示交互式窗口
                                     st.info("🖱️ 交互式窗口已打开，您可以：\n• 左键拖动旋转\n• 右键拖动平移\n• 滚轮缩放\n• 关闭窗口后继续")
                                     plotter.show()
-                                    
-                                except Exception as interactive_error:
-                                    # 如果交互式模式失败，自动切换到静态图像模式
-                                    st.warning(f"⚠️ 交互式窗口不可用 (云环境限制): {str(interactive_error)}")
-                                    st.info("🔄 自动切换到静态图像模式...")
-                                    
+                                    return True
+                                
+                                def create_error_fallback():
                                     # 创建离屏绘图器用于静态图像
                                     plotter = pv.Plotter(off_screen=True, window_size=[800, 600])
                                     
@@ -2544,7 +2770,7 @@ elif page == "🎨 三维可视化":
                                             opacity=low_error_opacity,
                                             show_edges=show_edges_error,
                                             edge_color='black',
-                                            label=f"误差 < {threshold:.4f}"
+                                            label=f"Error < {threshold:.4f}"
                                         )
                                     
                                     # 然后添加高误差点
@@ -2556,12 +2782,12 @@ elif page == "🎨 三维可视化":
                                             opacity=high_error_opacity,
                                             show_edges=show_edges_error,
                                             edge_color='black',
-                                            label=f"误差 > {threshold:.4f}"
+                                            label=f"Error > {threshold:.4f}"
                                         )
                                     
-                                    # 添加标题和其他元素
+                                    # 添加标题和其他元素（使用英文避免中文显示问题）
                                     plotter.add_text(
-                                        f"预测误差分布 - 验证点 {result['validation_idx']+1}",
+                                        f"Error Distribution - Point {result['validation_idx']+1}",
                                         position='upper_edge',
                                         font_size=12,
                                         color='black'
@@ -2575,9 +2801,18 @@ elif page == "🎨 三维可视化":
                                     plotter.show(auto_close=False)
                                     image = plotter.screenshot()
                                     plotter.close()
-                                    
-                                    # 在Streamlit中显示图像
-                                    st.image(image, caption="预测误差分布图 (静态模式)", use_column_width=True)
+                                    return image
+                                
+                                # 使用安全的交互式窗口函数
+                                result_img, error_msg = create_safe_interactive_window(create_error_interactive, create_error_fallback)
+                                
+                                if error_msg and result_img:
+                                    st.warning(f"⚠️ {error_msg}")
+                                    # 显示备选方案的结果
+                                    st.image(result_img, caption="预测误差分布图 (静态模式)", use_column_width=True)
+                                elif error_msg:
+                                    st.error(f"❌ 交互式和备选方案都失败了: {error_msg}")
+                                    viz_mode_error = "静态图像"  # 强制切换到静态模式
                                 
                             else:
                                 # 创建离屏绘图器用于静态图像
@@ -2593,7 +2828,7 @@ elif page == "🎨 三维可视化":
                                         opacity=low_error_opacity,
                                         show_edges=show_edges_error,
                                         edge_color='black',
-                                        label=f"误差 < {threshold:.4f}"
+                                        label=f"Error < {threshold:.4f}"
                                     )
                                 
                                 # 然后添加高误差点
@@ -2605,12 +2840,12 @@ elif page == "🎨 三维可视化":
                                         opacity=high_error_opacity,
                                         show_edges=show_edges_error,
                                         edge_color='black',
-                                        label=f"误差 > {threshold:.4f}"
+                                        label=f"Error > {threshold:.4f}"
                                     )
                                 
-                                # 添加标题和其他元素
+                                # 添加标题和其他元素（使用英文避免中文显示问题）
                                 plotter.add_text(
-                                    f"预测误差分布 - 验证点 {result['validation_idx']+1}",
+                                    f"Error Distribution - Point {result['validation_idx']+1}",
                                     position='upper_edge',
                                     font_size=12,
                                     color='black'
