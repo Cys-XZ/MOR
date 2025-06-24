@@ -386,8 +386,106 @@ except ImportError:
 st.set_page_config(
     page_title="模型降阶工具",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# 设置全局样式
+st.markdown("""
+<style>
+    /* 主容器样式 */
+    .main {
+        padding-top: 2rem;
+    }
+    
+    /* 标题样式 */
+    h1 {
+        color: #1f77b4;
+        border-bottom: 3px solid #1f77b4;
+        padding-bottom: 10px;
+        margin-bottom: 30px;
+    }
+    
+    h2 {
+        color: #2ca02c;
+        margin-top: 20px;
+        margin-bottom: 15px;
+    }
+    
+    h3 {
+        color: #ff7f0e;
+        margin-top: 15px;
+        margin-bottom: 10px;
+    }
+    
+    /* 信息框美化 */
+    .stAlert {
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+    }
+    
+    /* 按钮美化 */
+    .stButton > button {
+        border-radius: 20px;
+        padding: 10px 20px;
+        font-weight: bold;
+        transition: all 0.3s;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+    }
+    
+    /* 侧边栏美化 */
+    .css-1d391kg {
+        background-color: #f0f2f6;
+    }
+    
+    /* 分隔线样式 */
+    hr {
+        margin: 30px 0;
+        border: none;
+        border-top: 2px solid #e0e0e0;
+    }
+    
+    /* 度量值卡片美化 */
+    [data-testid="metric-container"] {
+        background-color: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* 文件上传区域美化 */
+    [data-testid="stFileUploader"] {
+        border: 2px dashed #cccccc;
+        border-radius: 10px;
+        padding: 20px;
+        background-color: #fafafa;
+    }
+    
+    /* 展开器美化 */
+    .streamlit-expanderHeader {
+        background-color: #f0f2f6;
+        border-radius: 10px;
+        font-weight: bold;
+    }
+    
+    /* 选择框美化 */
+    .stSelectbox > div > div {
+        border-radius: 10px;
+    }
+    
+    /* 数据框美化 */
+    .stDataFrame {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # 初始化session state
 if 'snapshots_x' not in st.session_state:
@@ -447,206 +545,288 @@ def update_array_info():
         st.session_state.array_info = ""
 
 # 侧边栏页面选择
-st.sidebar.title("📊 模型降阶工具")
-page = st.sidebar.selectbox(
-    "选择页面",
-    ["📥 数据导入与保存", "🔬 预测测试", "🔗 联合降阶模型测试", "🎨 三维可视化", "📈 图表输出"]
-)
+with st.sidebar:
+    st.markdown("# 📊 模型降阶工具")
+    st.markdown("---")
+    
+    # 添加简介
+    st.markdown("""
+    <div style='background-color: #f0f2f6; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <h4 style='margin: 0 0 10px 0; color: #1f77b4;'>🚀 功能简介</h4>
+        <p style='margin: 0; font-size: 14px;'>
+        • 支持大文件VTU/NPY导入<br>
+        • 多种降阶方法对比<br>
+        • 交互式3D可视化<br>
+        • 预测精度分析<br>
+        • 图表导出功能
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    page = st.selectbox(
+        "🎯 选择功能页面",
+        ["📥 数据导入与保存", "🔬 预测测试", "🔗 联合降阶模型测试", "🎨 三维可视化", "📈 图表输出"],
+        help="选择您要使用的功能模块"
+    )
+    
+    st.markdown("---")
+    
+    # 添加当前数据状态
+    st.markdown("### 📊 数据状态")
+    data_status = []
+    if st.session_state.snapshots_x is not None:
+        data_status.append(f"✅ X分量")
+    if st.session_state.snapshots_y is not None:
+        data_status.append(f"✅ Y分量")
+    if st.session_state.snapshots_z is not None:
+        data_status.append(f"✅ Z分量")
+    if st.session_state.snapshots_stress is not None:
+        data_status.append(f"✅ 应力")
+    if st.session_state.param is not None:
+        data_status.append(f"✅ 参数")
+    
+    if data_status:
+        st.success("已加载: " + " | ".join(data_status))
+    else:
+        st.info("尚未加载任何数据")
 
 # 页面1：数据导入与保存
 if page == "📥 数据导入与保存":
     st.title("📥 数据导入与保存")
-    st.markdown("---")
+    
+    # 添加页面描述
+    st.markdown("""
+    <div style='background-color: #e8f4f8; padding: 20px; border-radius: 10px; margin-bottom: 30px;'>
+        <h4 style='margin: 0 0 10px 0;'>📌 功能说明</h4>
+        <p style='margin: 0;'>本页面支持从VTU文件提取位移数据，或直接导入NPY格式的数组文件。支持任意大小的文件上传，无需额外配置。</p>
+    </div>
+    """, unsafe_allow_html=True)
 
     # 创建三列布局：数据读取、数据管理、数据保存
-    col1, col2, col3 = st.columns([1, 0.8, 1])
+    col1, col2, col3 = st.columns([1.2, 0.8, 1])
 
     with col1:
-        st.header("🔍 数据读取")
+        st.markdown("## 🔍 数据读取")
         
-        # VTU文件读取部分
-        st.subheader("读取VTU文件")
+        # 创建选项卡
+        tab_vtu, tab_npy = st.tabs(["📄 VTU文件", "📦 NPY文件"])
         
-        uploaded_vtu_file = st.file_uploader(
-            "选择VTU文件", 
-            type=['vtu'],
-            help="选择包含位移数据的VTU文件"
-        )
-        
-        # 文件大小提示
-        st.info("💡 如需上传大文件，请在运行时设置: streamlit run streamlit_app.py --server.maxUploadSize=1000")
-        
-        if uploaded_vtu_file is not None:
-            # 保存上传的文件到临时目录
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.vtu') as temp_file:
-                temp_file.write(uploaded_vtu_file.getvalue())
-                temp_file_path = temp_file.name
+        with tab_vtu:
+            st.markdown("### 读取VTU文件")
             
-            try:
-                # 列出可用的deltaT值
-                deltats = list_available_deltats(temp_file_path)
+            # 文件上传区域
+            uploaded_vtu_file = st.file_uploader(
+                "拖拽或点击上传VTU文件", 
+                type=['vtu'],
+                help="支持任意大小的VTU文件，包含位移数据"
+            )
+            
+            if uploaded_vtu_file is not None:
+                # 显示文件信息
+                file_size = uploaded_vtu_file.size / (1024 * 1024)  # 转换为MB
+                st.markdown(f"""
+                <div style='background-color: #d4edda; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+                    📁 文件名: {uploaded_vtu_file.name}<br>
+                    📏 文件大小: {file_size:.2f} MB
+                </div>
+                """, unsafe_allow_html=True)
                 
-                if deltats:
-                    st.success(f"✅ 成功读取VTU文件: {uploaded_vtu_file.name}")
-                    st.info(f"📋 找到 {len(deltats)} 个deltaT值: {', '.join(deltats)}")
-                    
-                    # 让用户选择参数范围
-                    st.subheader("参数设置")
-                    
-                    col_param1, col_param2, col_param3 = st.columns(3)
-                    with col_param1:
-                        param_start = st.number_input("起始值", value=-50, help="参数的起始值")
-                    with col_param2:
-                        param_end = st.number_input("结束值", value=90, help="参数的结束值")
-                    with col_param3:
-                        param_step = st.number_input("步长", value=20, min_value=1, help="参数的步长")
-                    
-                    if st.button("🚀 开始处理VTU数据", type="primary"):
-                        with st.spinner("正在处理数据..."):
-                            try:
-                                snapshots_x = []
-                                snapshots_y = []
-                                snapshots_z = []
-                                snapshots_stress = []
-                                
-                                # 处理进度条
-                                progress_bar = st.progress(0)
-                                status_text = st.empty()
-                                
-                                for i, deltaT in enumerate(deltats):
-                                    status_text.text(f"正在处理 deltaT={deltaT}...")
-                                    
-                                    x_data, y_data, z_data, stress, mesh, found_components = extract_displacement_components(
-                                        temp_file_path,
-                                        deltaT=deltaT,
-                                        output_dir=None,
-                                        visualize=False
-                                    )
-                                    
-                                    if x_data is not None:
-                                        snapshots_x.append(x_data)
-                                    if y_data is not None:
-                                        snapshots_y.append(y_data)
-                                    if z_data is not None:
-                                        snapshots_z.append(z_data)
-                                    if stress is not None:
-                                        snapshots_stress.append(stress)
-                                    
-                                    progress_bar.progress((i + 1) / len(deltats))
-                                
-                                # 转换为numpy数组
-                                if snapshots_x:
-                                    st.session_state.snapshots_x = np.array(snapshots_x)
-                                if snapshots_y:
-                                    st.session_state.snapshots_y = np.array(snapshots_y)
-                                if snapshots_z:
-                                    st.session_state.snapshots_z = np.array(snapshots_z)
-                                if snapshots_stress:
-                                    st.session_state.snapshots_stress = np.array(snapshots_stress)
-                                
-                                # 保存网格数据（使用最后一个mesh）
-                                if mesh is not None:
-                                    st.session_state.mesh_data = mesh
-                                    st.session_state.mesh_info = f"""
-                                    📐 网格信息:
-                                    • 点数: {mesh.n_points}
-                                    • 单元数: {mesh.n_cells}
-                                    • 边界: {mesh.bounds}
-                                    """
-                                
-                                # 生成参数数组
-                                param_range = np.arange(param_start, param_end, param_step)
-                                st.session_state.param = param_range.reshape(-1, 1)
-                                
-                                # 更新文件信息
-                                st.session_state.file_info = f"""
-                                📁 文件名: {uploaded_vtu_file.name}
-                                📊 deltaT值数量: {len(deltats)}
-                                📈 参数范围: {param_start} 到 {param_end-param_step} (步长: {param_step})
-                                ✅ 处理完成时间: {np.datetime64('now')}
-                                """
-                                
-                                # 更新数组信息
-                                update_array_info()
-                                
-                                status_text.text("✅ 数据处理完成!")
-                                st.success("🎉 VTU数据处理完成!")
-                                
-                            except Exception as e:
-                                st.error(f"❌ 处理VTU数据时出错: {str(e)}")
-                else:
-                    st.error("❌ 未在文件中找到有效的deltaT数据")
-                    
-            except Exception as e:
-                st.error(f"❌ 读取VTU文件时出错: {str(e)}")
-            finally:
-                # 清理临时文件
-                if os.path.exists(temp_file_path):
-                    os.unlink(temp_file_path)
-        
-        st.markdown("---")
-        
-        # NPY文件读取部分
-        st.subheader("读取NPY文件")
-        
-        uploaded_npy_files = st.file_uploader(
-            "选择NPY文件", 
-            type=['npy'],
-            accept_multiple_files=True,
-            help="选择包含snapshots和参数的NPY文件"
-        )
-        
-        if uploaded_npy_files:
-            if st.button("📥 加载NPY数据"):
+                # 保存上传的文件到临时目录
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.vtu') as temp_file:
+                    temp_file.write(uploaded_vtu_file.getvalue())
+                    temp_file_path = temp_file.name
+                
                 try:
-                    loaded_files = []
-                    for uploaded_file in uploaded_npy_files:
-                        file_name = uploaded_file.name.lower()
-                        data = np.load(uploaded_file)
+                    # 列出可用的deltaT值
+                    deltats = list_available_deltats(temp_file_path)
+                    
+                    if deltats:
+                        st.success(f"✅ 成功读取VTU文件: {uploaded_vtu_file.name}")
+                        st.info(f"📋 找到 {len(deltats)} 个deltaT值: {', '.join(deltats)}")
                         
-                        if 'snapshots_x' in file_name or 'x' in file_name:
-                            st.session_state.snapshots_x = data
-                            st.success(f"✅ 加载X分量数据: {data.shape}")
-                            loaded_files.append(f"X分量: {uploaded_file.name} ({data.shape})")
-                        elif 'snapshots_y' in file_name or 'y' in file_name:
-                            st.session_state.snapshots_y = data
-                            st.success(f"✅ 加载Y分量数据: {data.shape}")
-                            loaded_files.append(f"Y分量: {uploaded_file.name} ({data.shape})")
-                        elif 'snapshots_z' in file_name or 'z' in file_name:
-                            st.session_state.snapshots_z = data
-                            st.success(f"✅ 加载Z分量数据: {data.shape}")
-                            loaded_files.append(f"Z分量: {uploaded_file.name} ({data.shape})")
-                        elif 'stress' in file_name or 'stress' in file_name:
-                            st.session_state.snapshots_stress = data
-                            st.success(f"✅ 加载应力数据: {data.shape}")
-                            loaded_files.append(f"应力: {uploaded_file.name} ({data.shape})")
-                        elif 'param' in file_name:
-                            st.session_state.param = data
-                            st.success(f"✅ 加载参数数据: {data.shape}")
-                            loaded_files.append(f"参数: {uploaded_file.name} ({data.shape})")
-                        else:
-                            st.warning(f"⚠️ 未识别的文件: {uploaded_file.name}")
-                    
-                    # 更新文件信息
-                    if loaded_files:
-                        st.session_state.file_info = f"""
-                        📁 数据来源: NPY文件
-                        📊 加载的文件数量: {len(loaded_files)}
-                        📋 文件详情:
-                        {chr(10).join(['• ' + file for file in loaded_files])}
-                        ✅ 加载完成时间: {np.datetime64('now')}
-                        """
-                    
-                    # 更新数组信息
-                    update_array_info()
-                    
-                    st.success(f"🎉 成功加载 {len(loaded_files)} 个NPY文件!")
-                    
+                        # 让用户选择参数范围
+                        st.markdown("### ⚙️ 参数设置")
+                        
+                        col_param1, col_param2, col_param3 = st.columns(3)
+                        with col_param1:
+                            param_start = st.number_input("起始值", value=-50, help="参数的起始值")
+                        with col_param2:
+                            param_end = st.number_input("结束值", value=90, help="参数的结束值")
+                        with col_param3:
+                            param_step = st.number_input("步长", value=20, min_value=1, help="参数的步长")
+                        
+                        if st.button("🚀 开始处理VTU数据", type="primary", use_container_width=True):
+                            with st.spinner("正在处理数据..."):
+                                try:
+                                    snapshots_x = []
+                                    snapshots_y = []
+                                    snapshots_z = []
+                                    snapshots_stress = []
+                                    
+                                    # 处理进度条
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    
+                                    for i, deltaT in enumerate(deltats):
+                                        status_text.text(f"正在处理 deltaT={deltaT}...")
+                                        
+                                        x_data, y_data, z_data, stress, mesh, found_components = extract_displacement_components(
+                                            temp_file_path,
+                                            deltaT=deltaT,
+                                            output_dir=None,
+                                            visualize=False
+                                        )
+                                        
+                                        if x_data is not None:
+                                            snapshots_x.append(x_data)
+                                        if y_data is not None:
+                                            snapshots_y.append(y_data)
+                                        if z_data is not None:
+                                            snapshots_z.append(z_data)
+                                        if stress is not None:
+                                            snapshots_stress.append(stress)
+                                        
+                                        progress_bar.progress((i + 1) / len(deltats))
+                                    
+                                    # 转换为numpy数组
+                                    if snapshots_x:
+                                        st.session_state.snapshots_x = np.array(snapshots_x)
+                                    if snapshots_y:
+                                        st.session_state.snapshots_y = np.array(snapshots_y)
+                                    if snapshots_z:
+                                        st.session_state.snapshots_z = np.array(snapshots_z)
+                                    if snapshots_stress:
+                                        st.session_state.snapshots_stress = np.array(snapshots_stress)
+                                    
+                                    # 保存网格数据（使用最后一个mesh）
+                                    if mesh is not None:
+                                        st.session_state.mesh_data = mesh
+                                        st.session_state.mesh_info = f"""
+                                        📐 网格信息:
+                                        • 点数: {mesh.n_points}
+                                        • 单元数: {mesh.n_cells}
+                                        • 边界: {mesh.bounds}
+                                        """
+                                    
+                                    # 生成参数数组
+                                    param_range = np.arange(param_start, param_end, param_step)
+                                    st.session_state.param = param_range.reshape(-1, 1)
+                                    
+                                    # 更新文件信息
+                                    st.session_state.file_info = f"""
+                                    📁 文件名: {uploaded_vtu_file.name}
+                                    📊 deltaT值数量: {len(deltats)}
+                                    📈 参数范围: {param_start} 到 {param_end-param_step} (步长: {param_step})
+                                    ✅ 处理完成时间: {np.datetime64('now')}
+                                    """
+                                    
+                                    # 更新数组信息
+                                    update_array_info()
+                                    
+                                    status_text.text("✅ 数据处理完成!")
+                                    st.success("🎉 VTU数据处理完成!")
+                                    
+                                    # 显示处理结果摘要
+                                    st.markdown(f"""
+                                    <div style='background-color: #d4edda; padding: 15px; border-radius: 10px; margin-top: 20px;'>
+                                        <h4 style='margin: 0 0 10px 0;'>✅ 处理成功</h4>
+                                        <p style='margin: 5px 0;'>• 提取了 {len(deltats)} 个时间步的数据</p>
+                                        <p style='margin: 5px 0;'>• 参数范围: {param_start} 到 {param_end-param_step}</p>
+                                        <p style='margin: 5px 0;'>• 网格点数: {mesh.n_points if mesh else 'N/A'}</p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ 处理VTU数据时出错: {str(e)}")
+                    else:
+                        st.error("❌ 未在文件中找到有效的deltaT数据")
+                        
                 except Exception as e:
-                    st.error(f"❌ 加载NPY文件时出错: {str(e)}")
+                    st.error(f"❌ 读取VTU文件时出错: {str(e)}")
+                finally:
+                    # 清理临时文件
+                    if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+        
+        with tab_npy:
+            st.markdown("### 读取NPY文件")
+            
+            uploaded_npy_files = st.file_uploader(
+                "拖拽或点击上传NPY文件（支持多选）", 
+                type=['npy'],
+                accept_multiple_files=True,
+                help="支持同时上传多个NPY文件，如snapshots_x.npy, snapshots_y.npy等"
+            )
+            
+            if uploaded_npy_files:
+                # 显示上传的文件列表
+                st.markdown("#### 📋 已选择的文件:")
+                file_info_html = "<div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px;'>"
+                for file in uploaded_npy_files:
+                    file_size = file.size / (1024 * 1024)
+                    file_info_html += f"• {file.name} ({file_size:.2f} MB)<br>"
+                file_info_html += "</div>"
+                st.markdown(file_info_html, unsafe_allow_html=True)
+                
+                if st.button("📥 加载NPY数据", type="primary", use_container_width=True):
+                    try:
+                        loaded_files = []
+                        with st.spinner("正在加载NPY文件..."):
+                            for uploaded_file in uploaded_npy_files:
+                                file_name = uploaded_file.name.lower()
+                                data = np.load(uploaded_file)
+                                
+                                if 'snapshots_x' in file_name or 'x' in file_name:
+                                    st.session_state.snapshots_x = data
+                                    loaded_files.append(f"X分量: {uploaded_file.name} ({data.shape})")
+                                elif 'snapshots_y' in file_name or 'y' in file_name:
+                                    st.session_state.snapshots_y = data
+                                    loaded_files.append(f"Y分量: {uploaded_file.name} ({data.shape})")
+                                elif 'snapshots_z' in file_name or 'z' in file_name:
+                                    st.session_state.snapshots_z = data
+                                    loaded_files.append(f"Z分量: {uploaded_file.name} ({data.shape})")
+                                elif 'stress' in file_name:
+                                    st.session_state.snapshots_stress = data
+                                    loaded_files.append(f"应力: {uploaded_file.name} ({data.shape})")
+                                elif 'param' in file_name:
+                                    st.session_state.param = data
+                                    loaded_files.append(f"参数: {uploaded_file.name} ({data.shape})")
+                                else:
+                                    st.warning(f"⚠️ 未识别的文件: {uploaded_file.name}")
+                        
+                        # 更新文件信息
+                        if loaded_files:
+                            st.session_state.file_info = f"""
+                            📁 数据来源: NPY文件
+                            📊 加载的文件数量: {len(loaded_files)}
+                            📋 文件详情:
+                            {chr(10).join(['• ' + file for file in loaded_files])}
+                            ✅ 加载完成时间: {np.datetime64('now')}
+                            """
+                        
+                        # 更新数组信息
+                        update_array_info()
+                        
+                        # 显示加载结果摘要
+                        st.markdown(f"""
+                        <div style='background-color: #d4edda; padding: 15px; border-radius: 10px; margin-top: 20px;'>
+                            <h4 style='margin: 0 0 10px 0;'>✅ 加载成功</h4>
+                            <p style='margin: 5px 0;'>成功加载 {len(loaded_files)} 个NPY文件</p>
+                            {'<br>'.join([f"<p style='margin: 5px 0;'>• {file}</p>" for file in loaded_files])}
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                    except Exception as e:
+                        st.error(f"❌ 加载NPY文件时出错: {str(e)}")
 
     with col2:
-        st.header("🗂️ 数据管理")
+        st.markdown("## 🗂️ 数据管理")
+        
+        # 使用卡片样式显示数据状态
+        st.markdown("""
+        <div style='background-color: #fff3cd; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
+            <h4 style='margin: 0 0 10px 0;'>📊 当前数据状态</h4>
+        """, unsafe_allow_html=True)
         
         # 检查是否有数据
         has_data = any([
@@ -658,20 +838,38 @@ if page == "📥 数据导入与保存":
         ])
         
         if has_data:
-            st.subheader("🧹 清除数据")
+            data_info = []
+            if st.session_state.snapshots_x is not None:
+                data_info.append(f"✅ X分量: {st.session_state.snapshots_x.shape}")
+            if st.session_state.snapshots_y is not None:
+                data_info.append(f"✅ Y分量: {st.session_state.snapshots_y.shape}")
+            if st.session_state.snapshots_z is not None:
+                data_info.append(f"✅ Z分量: {st.session_state.snapshots_z.shape}")
+            if st.session_state.snapshots_stress is not None:
+                data_info.append(f"✅ 应力: {st.session_state.snapshots_stress.shape}")
+            if st.session_state.param is not None:
+                data_info.append(f"✅ 参数: {st.session_state.param.shape}")
+            
+            for info in data_info:
+                st.markdown(f"<p style='margin: 5px 0;'>{info}</p>", unsafe_allow_html=True)
+        else:
+            st.markdown("<p style='margin: 0; color: #666;'>尚未加载任何数据</p>", unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        if has_data:
+            st.markdown("### 🧹 清除数据")
             st.warning("⚠️ 此操作将清除所有已加载的数组数据")
             
-            if st.button("🗑️ 清除所有数据", type="secondary"):
+            if st.button("🗑️ 清除所有数据", type="secondary", use_container_width=True):
                 clear_all_arrays()
                 st.success("✅ 所有数据已清除!")
                 st.rerun()
-        else:
-            st.info("ℹ️ 当前没有已加载的数据")
         
         st.markdown("---")
         
         # 保存路径设置
-        st.subheader("📁 保存路径设置")
+        st.markdown("### 📁 保存路径设置")
         
         # 默认保存路径设置
         current_default = st.session_state.default_save_path
@@ -683,12 +881,12 @@ if page == "📥 数据导入与保存":
         
         col_path1, col_path2 = st.columns(2)
         with col_path1:
-            if st.button("📂 选择当前目录"):
+            if st.button("📂 选择当前目录", use_container_width=True):
                 st.session_state.default_save_path = str(Path.cwd())
                 st.rerun()
         
         with col_path2:
-            if st.button("💾 更新默认路径"):
+            if st.button("💾 更新默认路径", use_container_width=True):
                 if Path(new_default_path).exists():
                     st.session_state.default_save_path = new_default_path
                     st.success("✅ 默认路径已更新!")
@@ -698,145 +896,169 @@ if page == "📥 数据导入与保存":
         st.info(f"📍 当前默认路径: {st.session_state.default_save_path}")
 
     with col3:
-        st.header("💾 数据保存与信息")
+        st.markdown("## 💾 数据保存与信息")
         
-        # 保存数据部分
-        st.subheader("保存数据")
-        
-        if has_data:
-            # 保存路径选择
-            use_default = st.checkbox("使用默认保存路径", value=True)
-            
-            if use_default:
-                save_base_path = st.session_state.default_save_path
-                st.info(f"📍 保存基础路径: {save_base_path}")
-            else:
-                save_base_path = st.text_input(
-                    "自定义保存路径", 
-                    value=st.session_state.default_save_path,
-                    help="输入自定义的保存基础路径"
+        # 使用展开器组织内容
+        with st.expander("💾 保存数据", expanded=True):
+            if has_data:
+                # 保存路径选择
+                use_default = st.checkbox("使用默认保存路径", value=True)
+                
+                if use_default:
+                    save_base_path = st.session_state.default_save_path
+                    st.info(f"📍 保存路径: {save_base_path}")
+                else:
+                    save_base_path = st.text_input(
+                        "自定义保存路径", 
+                        value=st.session_state.default_save_path,
+                        help="输入自定义的保存基础路径"
+                    )
+                
+                save_folder_name = st.text_input(
+                    "保存文件夹名称", 
+                    value="displacement_data",
+                    help="输入要保存数据的文件夹名称"
                 )
-            
-            save_folder_name = st.text_input(
-                "保存文件夹名称", 
-                value="displacement_data",
-                help="输入要保存数据的文件夹名称"
-            )
-            
-            # 显示完整保存路径
-            full_save_path = Path(save_base_path) / save_folder_name
-            st.info(f"📁 完整保存路径: {full_save_path}")
-            
-            if st.button("💾 保存所有数据", type="primary"):
-                try:
-                    # 确保基础路径存在
-                    base_path = Path(save_base_path)
-                    if not base_path.exists():
-                        st.error(f"❌ 基础路径不存在: {base_path}")
-                    else:
-                        # 创建保存目录
-                        save_dir = base_path / save_folder_name
-                        save_dir.mkdir(exist_ok=True)
-                        
-                        saved_files = []
-                        
-                        # 保存各个数组
-                        if st.session_state.snapshots_x is not None:
-                            file_path = save_dir / "snapshots_x.npy"
-                            np.save(file_path, st.session_state.snapshots_x)
-                            saved_files.append(f"snapshots_x.npy ({st.session_state.snapshots_x.shape})")
-                        
-                        if st.session_state.snapshots_y is not None:
-                            file_path = save_dir / "snapshots_y.npy"
-                            np.save(file_path, st.session_state.snapshots_y)
-                            saved_files.append(f"snapshots_y.npy ({st.session_state.snapshots_y.shape})")
-                        
-                        if st.session_state.snapshots_z is not None:
-                            file_path = save_dir / "snapshots_z.npy"
-                            np.save(file_path, st.session_state.snapshots_z)
-                            saved_files.append(f"snapshots_z.npy ({st.session_state.snapshots_z.shape})")
-                        
-                        if st.session_state.snapshots_stress is not None:
-                            file_path = save_dir / "snapshots_stress.npy"
-                            np.save(file_path, st.session_state.snapshots_stress)
-                            saved_files.append(f"snapshots_stress.npy ({st.session_state.snapshots_stress.shape})")
-                        
-                        if st.session_state.param is not None:
-                            file_path = save_dir / "param.npy"
-                            np.save(file_path, st.session_state.param)
-                            saved_files.append(f"param.npy ({st.session_state.param.shape})")
-                        
-                        st.success(f"✅ 数据已保存到文件夹: {save_dir.absolute()}")
-                        st.info("📁 保存的文件:\n" + "\n".join([f"• {file}" for file in saved_files]))
-                        
-                except Exception as e:
-                    st.error(f"❌ 保存数据时出错: {str(e)}")
-        else:
-            st.info("ℹ️ 没有可保存的数据，请先读取VTU或NPY文件")
-        
-        st.markdown("---")
+                
+                # 显示完整保存路径
+                full_save_path = Path(save_base_path) / save_folder_name
+                st.markdown(f"""
+                <div style='background-color: #d1ecf1; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+                    📁 完整保存路径: {full_save_path}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if st.button("💾 保存所有数据", type="primary", use_container_width=True):
+                    try:
+                        # 确保基础路径存在
+                        base_path = Path(save_base_path)
+                        if not base_path.exists():
+                            st.error(f"❌ 基础路径不存在: {base_path}")
+                        else:
+                            # 创建保存目录
+                            save_dir = base_path / save_folder_name
+                            save_dir.mkdir(exist_ok=True)
+                            
+                            saved_files = []
+                            
+                            # 保存各个数组
+                            if st.session_state.snapshots_x is not None:
+                                file_path = save_dir / "snapshots_x.npy"
+                                np.save(file_path, st.session_state.snapshots_x)
+                                saved_files.append(f"snapshots_x.npy ({st.session_state.snapshots_x.shape})")
+                            
+                            if st.session_state.snapshots_y is not None:
+                                file_path = save_dir / "snapshots_y.npy"
+                                np.save(file_path, st.session_state.snapshots_y)
+                                saved_files.append(f"snapshots_y.npy ({st.session_state.snapshots_y.shape})")
+                            
+                            if st.session_state.snapshots_z is not None:
+                                file_path = save_dir / "snapshots_z.npy"
+                                np.save(file_path, st.session_state.snapshots_z)
+                                saved_files.append(f"snapshots_z.npy ({st.session_state.snapshots_z.shape})")
+                            
+                            if st.session_state.snapshots_stress is not None:
+                                file_path = save_dir / "snapshots_stress.npy"
+                                np.save(file_path, st.session_state.snapshots_stress)
+                                saved_files.append(f"snapshots_stress.npy ({st.session_state.snapshots_stress.shape})")
+                            
+                            if st.session_state.param is not None:
+                                file_path = save_dir / "param.npy"
+                                np.save(file_path, st.session_state.param)
+                                saved_files.append(f"param.npy ({st.session_state.param.shape})")
+                            
+                            st.success(f"✅ 数据已保存到文件夹: {save_dir.absolute()}")
+                            st.info("📁 保存的文件:\n" + "\n".join([f"• {file}" for file in saved_files]))
+                            
+                            # 显示保存成功提示
+                            st.markdown(f"""
+                            <div style='background-color: #d4edda; padding: 15px; border-radius: 10px; margin-top: 20px;'>
+                                <h4 style='margin: 0 0 10px 0;'>✅ 保存成功</h4>
+                                <p style='margin: 5px 0;'>数据已保存到: {save_dir.absolute()}</p>
+                                <p style='margin: 5px 0;'>共保存 {len(saved_files)} 个文件</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                    except Exception as e:
+                        st.error(f"❌ 保存数据时出错: {str(e)}")
+            else:
+                st.info("ℹ️ 没有可保存的数据，请先读取VTU或NPY文件")
         
         # 信息显示部分
-        st.subheader("📊 读取信息")
-        
-        if st.session_state.file_info:
-            st.text_area("文件信息", st.session_state.file_info, height=120, disabled=True)
-        else:
-            st.info("ℹ️ 尚未读取任何文件")
-        
-        st.subheader("📋 数组信息")
-        
-        # 添加刷新按钮
-        col_refresh, col_empty = st.columns([1, 3])
-        with col_refresh:
-            if st.button("🔄 刷新状态"):
-                update_array_info()
-                st.success("✅ 状态已刷新!")
-        
-        if st.session_state.array_info:
-            st.text_area("数组信息", st.session_state.array_info, height=120, disabled=True)
-        else:
-            st.info("ℹ️ 尚未加载任何数组")
+        with st.expander("📊 数据信息", expanded=True):
+            if st.session_state.file_info:
+                st.markdown("#### 📁 文件信息")
+                st.text_area("", st.session_state.file_info, height=120, disabled=True, label_visibility="collapsed")
+            else:
+                st.info("ℹ️ 尚未读取任何文件")
+            
+            if st.session_state.array_info:
+                st.markdown("#### 📋 数组信息")
+                # 添加刷新按钮
+                if st.button("🔄 刷新状态", key="refresh_array_info"):
+                    update_array_info()
+                    st.success("✅ 状态已刷新!")
+                st.text_area("", st.session_state.array_info, height=120, disabled=True, label_visibility="collapsed")
+            else:
+                st.info("ℹ️ 尚未加载任何数组")
         
         # 数据预览
         if has_data:
-            st.subheader("🔍 数据预览")
-            
-            preview_option = st.selectbox(
-                "选择要预览的数据",
-                ["无", "X分量", "Y分量", "Z分量", "应力", "参数"]
-            )
-            
-            if preview_option != "无":
-                data_map = {
-                    "X分量": st.session_state.snapshots_x,
-                    "Y分量": st.session_state.snapshots_y,
-                    "Z分量": st.session_state.snapshots_z,
-                    "应力": st.session_state.snapshots_stress,
-                    "参数": st.session_state.param
-                }
+            with st.expander("🔍 数据预览", expanded=False):
+                preview_option = st.selectbox(
+                    "选择要预览的数据",
+                    ["无", "X分量", "Y分量", "Z分量", "应力", "参数"]
+                )
                 
-                selected_data = data_map[preview_option]
-                if selected_data is not None:
-                    st.write(f"**{preview_option}数据形状**: {selected_data.shape}")
-                    st.write(f"**数据类型**: {selected_data.dtype}")
-                    st.write(f"**数据范围**: [{selected_data.min():.6f}, {selected_data.max():.6f}]")
+                if preview_option != "无":
+                    data_map = {
+                        "X分量": st.session_state.snapshots_x,
+                        "Y分量": st.session_state.snapshots_y,
+                        "Z分量": st.session_state.snapshots_z,
+                        "应力": st.session_state.snapshots_stress,
+                        "参数": st.session_state.param
+                    }
                     
-                    # 显示前几行数据
-                    if len(selected_data.shape) == 1:
-                        st.write("**前10个值**:")
-                        st.write(selected_data[:10])
+                    selected_data = data_map[preview_option]
+                    if selected_data is not None:
+                        # 使用度量值卡片显示统计信息
+                        col_stat1, col_stat2, col_stat3 = st.columns(3)
+                        with col_stat1:
+                            st.metric("数据形状", str(selected_data.shape))
+                        with col_stat2:
+                            st.metric("数据类型", str(selected_data.dtype))
+                        with col_stat3:
+                            st.metric("数据范围", f"[{selected_data.min():.3f}, {selected_data.max():.3f}]")
+                        
+                        # 显示前几行数据
+                        st.markdown("#### 数据样本")
+                        if len(selected_data.shape) == 1:
+                            st.write("前10个值:")
+                            st.code(str(selected_data[:10]))
+                        else:
+                            st.write("前5行数据:")
+                            st.dataframe(selected_data[:5], use_container_width=True)
                     else:
-                        st.write("**前5行数据**:")
-                        st.write(selected_data[:5])
-                else:
-                    st.warning(f"⚠️ {preview_option}数据未加载")
+                        st.warning(f"⚠️ {preview_option}数据未加载")
 
 # 页面2：预测测试
 elif page == "🔬 预测测试":
     st.title("🔬 预测测试")
     
-    # 显示数据概览
+    # 添加页面描述
+    st.markdown("""
+    <div style='background-color: #e8f4f8; padding: 20px; border-radius: 10px; margin-bottom: 30px;'>
+        <h4 style='margin: 0 0 10px 0;'>📌 功能说明</h4>
+        <p style='margin: 0;'>使用降阶模型进行预测测试，支持单点验证、多点验证和K折交叉验证，评估模型预测精度。</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 显示数据概览卡片
+    st.markdown("""
+    <div style='background-color: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;'>
+        <h4 style='margin: 0 0 10px 0;'>📊 数据概览</h4>
+    """, unsafe_allow_html=True)
+    
     data_overview = []
     if st.session_state.snapshots_x is not None:
         data_overview.append(f"X分量: {st.session_state.snapshots_x.shape}")
@@ -850,11 +1072,11 @@ elif page == "🔬 预测测试":
         data_overview.append(f"参数: {st.session_state.param.shape}")
     
     if data_overview:
-        st.success(f"✅ 已加载数据: {' | '.join(data_overview)}")
+        st.markdown("<p style='margin: 0;'>✅ 已加载数据: " + " | ".join(data_overview) + "</p>", unsafe_allow_html=True)
     else:
-        st.info("ℹ️ 尚未加载任何数据")
+        st.markdown("<p style='margin: 0; color: #666;'>ℹ️ 尚未加载任何数据</p>", unsafe_allow_html=True)
     
-    st.markdown("---")
+    st.markdown("</div>", unsafe_allow_html=True)
     
     if not EZYRB_AVAILABLE:
         st.error("❌ EZyRB库未安装，无法使用预测测试功能")
@@ -1742,7 +1964,14 @@ elif page == "🔬 预测测试":
 # 页面3：联合降阶模型测试
 elif page == "🔗 联合降阶模型测试":
     st.title("🔗 联合降阶模型测试")
-    st.markdown("---")
+    
+    # 添加页面描述
+    st.markdown("""
+    <div style='background-color: #e8f4f8; padding: 20px; border-radius: 10px; margin-bottom: 30px;'>
+        <h4 style='margin: 0 0 10px 0;'>📌 功能说明</h4>
+        <p style='margin: 0;'>比较不同降维方法（POD、PODAE、AE）与映射方法（RBF、GPR、ANN等）的组合性能，找出最佳模型配置。</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     if not EZYRB_AVAILABLE:
         st.error("❌ EZyRB库未安装，无法使用联合降阶模型测试功能")
@@ -2126,7 +2355,14 @@ elif page == "🔗 联合降阶模型测试":
 # 页面4：三维可视化
 elif page == "🎨 三维可视化":
     st.title("🎨 三维可视化")
-    st.markdown("---")
+    
+    # 添加页面描述
+    st.markdown("""
+    <div style='background-color: #e8f4f8; padding: 20px; border-radius: 10px; margin-bottom: 30px;'>
+        <h4 style='margin: 0 0 10px 0;'>📌 功能说明</h4>
+        <p style='margin: 0;'>提供原始网格、形变对比和预测误差的三维可视化功能。支持交互式窗口和静态图像两种模式。</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # 检测云环境并显示警告
     if is_cloud_environment():
@@ -2880,7 +3116,14 @@ elif page == "🎨 三维可视化":
 # 页面5：图表输出
 elif page == "📈 图表输出":
     st.title("📈 图表输出")
-    st.markdown("---")
+    
+    # 添加页面描述
+    st.markdown("""
+    <div style='background-color: #e8f4f8; padding: 20px; border-radius: 10px; margin-bottom: 30px;'>
+        <h4 style='margin: 0 0 10px 0;'>📌 功能说明</h4>
+        <p style='margin: 0;'>查看和管理所有生成的分析图表，支持批量导出和清除功能。</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     if 'generated_plots' not in st.session_state or not st.session_state.generated_plots:
         st.info("ℹ️ 还没有生成任何图表，请先在'预测测试'页面进行测试")
@@ -2959,8 +3202,11 @@ elif page == "📈 图表输出":
 st.markdown("---")
 st.markdown(
     """
-    <div style='text-align: center; color: #666;'>
-        <p>🔧 位移数据处理工具 | 支持VTU和NPY文件格式 | 批量数据处理 | 数据管理与保存 | 预测测试与分析</p>
+    <div style='text-align: center; padding: 30px 0; background-color: #f8f9fa; border-radius: 10px; margin-top: 50px;'>
+        <h4 style='margin: 0 0 10px 0; color: #666;'>🔧 模型降阶工具 v1.0</h4>
+        <p style='margin: 0; color: #888;'>
+            支持VTU和NPY文件格式 | 批量数据处理 | 多种降阶方法 | 3D可视化 | 预测精度分析
+        </p>
     </div>
     """, 
     unsafe_allow_html=True
